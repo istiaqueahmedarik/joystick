@@ -8,12 +8,19 @@ from flask_cors import CORS
 from flask import Flask,jsonify,request
 from flask_socketio import SocketIO, emit
 import cv2
+import zlib
 sio = socketio.Client()
+def compress_string(string):
+    compressed_data = zlib.compress(string.encode(),9)
+    return compressed_data
 
+def decompress_string(compressed_data):
+    decompressed_string = zlib.decompress(compressed_data).decode()
+    return decompressed_string
 DEADZONE = 50
 
 # sio.connect('http://192.168.68.105:5476')
-sio.connect('http://192.168.1.100:5476')
+sio.connect('http://192.168.1.102:5476')
 
 sio.on('connect', lambda: print('Connected to server'))
 sio.on('disconnect', lambda: print('Disconnected from server'))
@@ -28,7 +35,7 @@ def emit_with_retry(event, message, namespace, max_retries=30, retry_delay=1):
     attempt = 0
     while attempt < max_retries:
         try:
-            sio.emit(event, message, namespace=namespace)
+            sio.emit(event, compress_string(message), namespace=namespace)
             break  # If emit succeeds, break out of the loop
         except Exception as e:
             print(f"Error: {e}. Retrying...")
@@ -137,6 +144,11 @@ def joystick():
         # print(f"leftY: {leftY}, leftX: {leftX}, rightY: {rightY}, rightX: {rightX}, arm: {arm}, speed_mode: {speed_mode}, arm_mode: {arm_mode}, lifter: {lifter}")
         (leftMotor,rightMotor) = joystick_to_motor_speed(rightX,rightY)
         # s = str(23)+s
+
+        #map all the value from 10-20
+
+        
+
         s = "["
         s += str(leftMotor)+","
         s += str(rightMotor)+","
@@ -155,7 +167,7 @@ def joystick():
         if arm == 2000:
             emit_with_retry('joystick_data', s, namespace='/')
         # left_motor,right_motor,leftX,leftY,DL,DR,DU,DD,LT,RT,B0,B1,B2,B3,B4,B5,B6,B7,B8,B9,B10
-        time.sleep(0.2)
+        time.sleep(0.3)
         # rate.sleep()
         # 15(B) 16(x) 17(y)
         # 11 (DR)

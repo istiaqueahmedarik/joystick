@@ -13,7 +13,14 @@ from mavros_msgs.msg import Waypoint,ParamValue,RCOut,WaypointReached
 from mavros_msgs.srv import WaypointPush, WaypointPushRequest, WaypointPull, WaypointPullRequest,CommandBool,SetMode,WaypointClear,ParamSet
 import signal
 import sys
+import zlib
+def compress_string(string):
+    compressed_data = zlib.compress(string.encode())
+    return compressed_data
 
+def decompress_string(compressed_data):
+    decompressed_string = zlib.decompress(compressed_data).decode()
+    return decompressed_string
 def signal_handler(sig, frame):
     print('Server is shutting down...')
     sys.exit(0)
@@ -21,8 +28,7 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 app = Flask(__name__)
 
-from engineio.payload import Payload
-Payload.max_decode_packets = 500
+
 
 
 socketio = SocketIO(app, allow_upgrades=True, cors_allowed_origins='*')
@@ -33,9 +39,9 @@ push_srv = rospy.ServiceProxy('mavros/mission/push', WaypointPush)
 pull_srv = rospy.ServiceProxy('mavros/mission/pull', WaypointPull)
 waypoints = [] 
 
-pub = rospy.Publisher('joystick', String, queue_size=1)
+pub = rospy.Publisher('joystick', String, queue_size=20)
 rospy.Rate(10)
-mode = rospy.Publisher('mode', String, queue_size=1)
+mode = rospy.Publisher('mode', String, queue_size=20)
 current_mode = "manual"
 @socketio.on('connect')
 def connect():
@@ -44,17 +50,14 @@ def connect():
 @socketio.on('zavier')
 def zavier(data):
     print(data)
-armPub = rospy.Publisher('joyArm', String, queue_size=1)
+armPub = rospy.Publisher('joyArm', String, queue_size=10)
 @socketio.on('joystick_data')
 def joystick_data(data):
     if(current_mode!='manual'):
         return
     
-
-    socketio.emit('rover',{
-        'message': 'Joystick data received',
-    })
-    pub.publish(data)
+    rospy.loginfo("Joystick data recieved")
+    pub.publish(decompress_string(data))
     rospy.sleep(0.1)
 @socketio.on('armMsg')
 def armMsgData(data):
