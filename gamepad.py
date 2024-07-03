@@ -7,7 +7,6 @@ import keyboard
 from flask_cors import CORS
 from flask import Flask,jsonify,request
 from flask_socketio import SocketIO, emit
-import cv2
 import zlib
 sio = socketio.Client()
 
@@ -18,12 +17,7 @@ sio.connect('http://192.168.1.133:5476')
 
 sio.on('connect', lambda: print('Connected to server'))
 sio.on('disconnect', lambda: print('Disconnected from server'))
-def streamVid(data):
-    # Visualize the data
-    frame = data['data']
-    cv2.imshow('Video', frame)
-    cv2.waitKey(1)
-sio.on('video',streamVid)
+
 
 def emit_with_retry(event, message, namespace, max_retries=30, retry_delay=1):
     print(message)
@@ -101,9 +95,35 @@ def joystick():
     print("Number of buttons:", buttons)
 
     while True:
+        joystick_count = pygame.joystick.get_count()
+        if joystick_count == 0:
+            emit_with_retry('joystick_data', '[1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500]', namespace='/')
+            break
         l = False
         if(keyboard.is_pressed('l')):
             l = True
+        w=False
+        if(keyboard.is_pressed('w')):
+            w=True
+        s=False
+        if(keyboard.is_pressed('s')):
+            s=True
+        a=False
+        if(keyboard.is_pressed('a')):
+            a=True
+        d=False
+        if(keyboard.is_pressed('d')):
+            d=True
+        up_down=1500
+        left_right=1500
+        if(w):
+            up_down=2000
+        if(s):
+            up_down=1000
+        if(a):
+            left_right=1000
+        if(d):
+            left_right=2000
         pygame.event.pump()
         leftY = joystick.get_axis(3)
         leftX = joystick.get_axis(2)
@@ -155,12 +175,17 @@ def joystick():
         s+=str(lifter_mode)+","
         s+=str(speed_mode)+","
         s+=str(arm)+","
-        s+=str(light)
+        s+=str(light)+","
+        s+=str(up_down)+","
+        s+=str(left_right)
         s+="]"
         print(arm)
         emit_with_retry('armMsg', 'noarm' if arm == 2000 else 'arm', namespace='/')
         if arm == 2000:
             emit_with_retry('joystick_data', s, namespace='/')
+        else:
+             emit_with_retry('joystick_data', '[1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500]', namespace='/')
+
         # left_motor,right_motor,leftX,leftY,DL,DR,DU,DD,LT,RT,B0,B1,B2,B3,B4,B5,B6,B7,B8,B9,B10
         time.sleep(0.1)
         # rate.sleep()

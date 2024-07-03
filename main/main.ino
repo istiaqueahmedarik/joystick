@@ -178,13 +178,13 @@ void setup()
 {
     nh.getHardware()->setBaud(115200);
 
-    int timeout_ms = 100;
+    // int timeout_ms = 100;
 
-    Serial.setTimeout(timeout_ms);
+    // Serial.setTimeout(timeout_ms);
 
     Serial5.begin(9600);
     Serial4.begin(9600);
-    Serial.begin(115200);
+    // Serial.begin(9600);
     stepper_setup();
     positions[0] = 0;
     positions[1] = 0;
@@ -202,15 +202,34 @@ void setup()
 
 void loop()
 {
-    unsigned long currentTime = millis();
-    if (currentTime - lastJoyStickCtrlTime > 500)
-    {
 
+    // if (!Serial5.available())
+    // {
+    //     ST.motor(MOTOR1, 0);
+    //     ST.motor(MOTOR2, 0);
+    // }
+    // if (!Serial4.available())
+    // {
+    //     ST_ARM.motor(MOTOR1, 0);
+    //     ST_ARM.motor(MOTOR2, 0);
+    // }
+    if (!nh.connected())
+    {
         ST.motor(MOTOR1, 0);
         ST.motor(MOTOR2, 0);
-
         ST_ARM.motor(MOTOR1, 0);
         ST_ARM.motor(MOTOR2, 0);
+    }
+
+    unsigned long currentTime = millis();
+    if (currentTime - lastJoyStickCtrlTime > 1500)
+    {
+
+        //  ST.motor(MOTOR1, 0);
+        // ST.motor(MOTOR2, 0);
+
+        // ST_ARM.motor(MOTOR1, 0);
+        // ST_ARM.motor(MOTOR2, 0);
     }
 
     HANDLE_LIFTER();

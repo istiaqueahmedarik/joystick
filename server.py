@@ -1,3 +1,4 @@
+
 import math
 import rospy
 from std_msgs.msg import Float64MultiArray, String
@@ -22,6 +23,8 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 app = Flask(__name__)
 
+from engineio.payload import Payload
+Payload.max_decode_packets=5000000000000000000000000
 
 
 
@@ -38,6 +41,11 @@ current_mode = "manual"
 def connect():
     print('Client connected')
     rospy.loginfo('A new Client connected')
+@socketio.on('disconnect')
+def disconnect():
+    print('Client disconnected')
+    pub.publish('[1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500]')
+    rospy.loginfo('Client disconnected')
 @socketio.on('zavier')
 def zavier(data):
     print(data)
