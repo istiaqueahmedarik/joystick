@@ -13,7 +13,7 @@ sio = socketio.Client()
 DEADZONE = 30
 
 # sio.connect('http://192.168.68.105:5476')
-sio.connect('http://192.168.1.133:5476')
+sio.connect('http://localhost:5476')
 
 sio.on('connect', lambda: print('Connected to server'))
 sio.on('disconnect', lambda: print('Disconnected from server'))
@@ -71,7 +71,12 @@ def joystick_to_motor_speed(x, y):
 
     return int(left_speed), int(right_speed)
 
-    
+open1=1000
+open=1000
+cnt1 = 0
+cnt2 = 0
+flag1 = False
+flag2 = False
 
 def joystick():
     # rospy.init_node('joystickVal', anonymous=True)
@@ -95,35 +100,15 @@ def joystick():
     print("Number of buttons:", buttons)
 
     while True:
+        global open
+        global open1
+        global cnt1 
+        global cnt2
         joystick_count = pygame.joystick.get_count()
         if joystick_count == 0:
             emit_with_retry('joystick_data', '[1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500]', namespace='/')
             break
-        l = False
-        if(keyboard.is_pressed('l')):
-            l = True
-        w=False
-        if(keyboard.is_pressed('w')):
-            w=True
-        s=False
-        if(keyboard.is_pressed('s')):
-            s=True
-        a=False
-        if(keyboard.is_pressed('a')):
-            a=True
-        d=False
-        if(keyboard.is_pressed('d')):
-            d=True
-        up_down=1500
-        left_right=1500
-        if(w):
-            up_down=2000
-        if(s):
-            up_down=1000
-        if(a):
-            left_right=1000
-        if(d):
-            left_right=2000
+        
         pygame.event.pump()
         leftY = joystick.get_axis(3)
         leftX = joystick.get_axis(2)
@@ -147,15 +132,63 @@ def joystick():
         speed_mode = int((speed_mode+1)*500+1000)
         lifter = int((lifter+1)*500+1000)
         lifter_mode = int((lifter_mode+1)*500+1000)
-        light = int((l+1)*500+1000)
         gripper_of = int((1 - gripper_of) * 500 + 1000)
         gripper_on = int(gripper_on * 500 + 1500)
         gripper = gripper_on
         if(gripper_of!=1500):
             gripper = gripper_of
 
+        l = False
+        if(keyboard.is_pressed('l')):
+            l = True
+        w=False
+        if(keyboard.is_pressed('w')):
+            w=True
+        s=False
+        if(keyboard.is_pressed('s')):
+            s=True
+        a=False
+        if(keyboard.is_pressed('a')):
+            a=True
+        d=False
+        if(keyboard.is_pressed('d')):
+            d=True
+        o=False
+        if(keyboard.is_pressed('p')):
+            o=True
+            cnt1+=1
+            cnt1%=3
+        if(o):
+            if(cnt1==0 and open==1000):
+                open=2000
+            elif(cnt1==0 and open==2000):
+                open=1000
 
-
+            
+        o1=False
+        if(keyboard.is_pressed('o')):
+            o1=True
+            cnt2+=1
+            cnt2%=3
+        if(o1):
+            
+            if(cnt2==0 and open1==1000):
+                open1=2000
+            elif(cnt2==0 and open1==2000):
+                open1=1000
+        up_down=1500
+        left_right=1500
+        if(w):
+            up_down=1000
+        if(s):
+            up_down=2000
+        if(a):
+            left_right=2000
+        if(d):
+            left_right=1000
+        print(open)
+        light = int((l+1)*500+1000)
+        print(open)
         # print(f"leftY: {leftY}, leftX: {leftX}, rightY: {rightY}, rightX: {rightX}, arm: {arm}, speed_mode: {speed_mode}, arm_mode: {arm_mode}, lifter: {lifter}")
         (leftMotor,rightMotor) = joystick_to_motor_speed(rightX,rightY)
         # s = str(23)+s
@@ -177,14 +210,16 @@ def joystick():
         s+=str(arm)+","
         s+=str(light)+","
         s+=str(up_down)+","
-        s+=str(left_right)
+        s+=str(left_right)+","
+        s+=str(open)+","
+        s+=str(open1)
         s+="]"
         print(arm)
         emit_with_retry('armMsg', 'noarm' if arm == 2000 else 'arm', namespace='/')
         if arm == 2000:
             emit_with_retry('joystick_data', s, namespace='/')
         else:
-             emit_with_retry('joystick_data', '[1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500]', namespace='/')
+             emit_with_retry('joystick_data', '[1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1000,1000]', namespace='/')
 
         # left_motor,right_motor,leftX,leftY,DL,DR,DU,DD,LT,RT,B0,B1,B2,B3,B4,B5,B6,B7,B8,B9,B10
         time.sleep(0.1)

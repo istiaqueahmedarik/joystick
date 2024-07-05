@@ -15,8 +15,8 @@ entrance = False
 rotate = False
 findOnce = False
 # Callback function to process incoming messages
-last_msg_time = None
 tups = False
+last_msg_time = None
 OBSTACLE_AVOIDANCE_FLAG = False
 def aruco_path_for_one(tuple):
     global findOnce

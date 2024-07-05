@@ -3,10 +3,20 @@
 #include <std_msgs/Int64.h>
 #include <std_msgs/Float64.h>
 #include <SabertoothSimplified.h>
+#include <Servo.h>
 
 #define ST_ADDRESS 128 // Sabertooth address (default: 128)
 #define MOTOR1 1       // Sabertooth motor 1 //right
 #define MOTOR2 2       // Sabertooth motor 2 //left
+
+Servo boxservo1;
+Servo boxservo2;
+Servo pan;
+Servo tilt;
+int panpos1 = 90;
+int tiltpos1 = 0;
+int panpos = 0;
+int tiltpos = 0;
 
 SabertoothSimplified ST(Serial5);
 SabertoothSimplified ST_ARM(Serial4);
@@ -91,6 +101,76 @@ ros::NodeHandle nh;
 unsigned long lastJoyStickCtrlTime = 0;
 int mode = 1;
 // Callback function to handle incoming joystick messages
+void box1(int panval)
+{
+
+    if (panval == 1000)
+    {
+
+        boxservo1.write(0);
+    }
+
+    else if (panval == 2000)
+    {
+
+        boxservo1.write(180);
+    }
+}
+
+void box2(int tiltval)
+{
+
+    if (tiltval == 2000)
+    {
+        tiltpos++;
+
+        boxservo2.write(180);
+    }
+
+    else if (tiltval == 1000)
+    {
+
+        boxservo2.write(0);
+    }
+}
+void panServo(int panval)
+{
+
+    if (panval == 1000)
+    {
+        panpos1 -= 3;
+        panpos1 = max(0, panpos1);
+        pan.write(panpos1);
+    }
+
+    else if (panval == 2000)
+    {
+        panpos1 += 3;
+        panpos1 = min(90, panpos1);
+
+        pan.write(panpos1);
+    }
+}
+
+void tiltServo(int tiltval)
+{
+
+    if (tiltval == 2000)
+    {
+        tiltpos1 += 3;
+        tiltpos1 = min(180, tiltpos1);
+
+        tilt.write(tiltpos1);
+    }
+
+    else if (tiltval == 1000)
+    {
+        tiltpos1 -= 3;
+        tiltpos1 = max(0, tiltpos1);
+
+        tilt.write(tiltpos1);
+    }
+}
 void joystickCallback(const std_msgs::String &msg)
 {
     nh.spinOnce();
@@ -161,7 +241,22 @@ void joystickCallback(const std_msgs::String &msg)
             mode = 3;
         }
     }
-
+    if (arr.size() >= 14)
+    {
+        box1(arr[13]);
+    }
+    if (arr.size() >= 15)
+    {
+        box2(arr[14]);
+    }
+    if (arr.size() >= 12)
+    {
+        panServo(arr[11]);
+    }
+    if (arr.size() >= 13)
+    {
+        tiltServo(arr[12]);
+    }
     // // Set motor 2 to move backward at full speed
     // ST.motor(MOTOR2, yl);
     // vl.data = yu;
@@ -184,7 +279,16 @@ void setup()
 
     Serial5.begin(9600);
     Serial4.begin(9600);
-    // Serial.begin(9600);
+    Serial.begin(9600);
+    boxservo1.attach(3);
+    boxservo2.attach(2);
+    boxservo1.write(panpos);
+    boxservo2.write(tiltpos);
+    // 11
+    pan.attach(4);
+    tilt.attach(5);
+    pan.write(panpos1);
+    tilt.write(tiltpos1);
     stepper_setup();
     positions[0] = 0;
     positions[1] = 0;

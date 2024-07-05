@@ -8,33 +8,31 @@ from mavros_msgs.srv import SetMode, CommandBool
 from mavros_msgs.msg import RCOut
 from std_msgs.msg import String
 from mavros_msgs.msg import ActuatorControl
-
+def getMotorSpeed(x,y):
+    if(x>1400 and x<1600 and (y>1600 or y<1400)):
+        return (y,y)
+    elif(y>1400 and y<1600):
+        return (x,3000-x)
+    else:
+        l = int((((y-1500)*(x-1500))/500))
+        r = (y-l)
+        return (l,r)
 pub = rospy.Publisher('joystick', String, queue_size=10)
 def rc_out_callback(data):
     # rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.channels)
     ch1 = data.channels[0]
     ch2 = data.channels[1]
-    st = "[" + str(ch1) + "," + str(ch2) + "]"
+    # map ch1 andch2 from 1000 to 2000 to 1300 to 1700
+    ch1 = (ch1-1000)*(400/1000)+1300
+    ch2 = (ch2-1000)*(400/1000)+1300
+
+    
+    
+    st = "[" + str(int(ch1)) + "," + str(int(ch1)) + "]"
     # rospy.loginfo(st)
     pub.publish(st)
 
-def actuator_callback(msg):
-    left_front = msg.controls[0]
-    right_front = msg.controls[1]
-    left_rear = msg.controls[2]
-    right_rear = msg.controls[3]
 
-    # map the values from -1 to 1 to 1000 to 2000
-    left_front = int(left_front * 500 + 1500)
-    right_front = int(right_front * 500 + 1500)
-    left_rear = int(left_rear * 500 + 1500)
-    right_rear = int(right_rear * 500 + 1500)
-
-
-    rospy.loginfo(f"Left front: {left_front}")
-    rospy.loginfo(f"Right front: {right_front}")
-    rospy.loginfo(f"Left rear: {left_rear}")
-    rospy.loginfo(f"Right rear: {right_rear}")
 
 
 def upload_mission(waypoints):
@@ -128,9 +126,10 @@ def main():
     rospy.on_shutdown(safe)
     # Create a list of waypoints
     waypoints = [
-        create_waypoint(47.3977419, 8.5455938, 10),  # Example coordinates
-        create_waypoint(47.3977419, 8.5456938, 20),
-        create_waypoint(47.3978419, 8.5456938, 30),
+        create_waypoint(23.8377406, 90.3575542, 10), 
+        create_waypoint(23.8377406, 90.3575542, 10),  # Example coordinates
+          # Example coordinates
+        
     ]
 
     disarm()
@@ -164,5 +163,5 @@ def main():
 
 if __name__ == '__main__':
     rospy.Subscriber('/mavros/rc/out', RCOut, rc_out_callback)
-    rospy.Subscriber('/mavros/actuator_control', ActuatorControl, actuator_callback)
+    
     main()
