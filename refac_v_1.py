@@ -5,7 +5,7 @@ import rospy
 from detect_aruco.msg import Num
 from aruco_go.msg import wheel
 from std_msgs.msg import String, Float64
-from mavros_msgs.msg import Imu
+from sensor_msgs.msg import Imu
 import time
 from sensor_msgs.msg import LaserScan
 import threading
@@ -31,6 +31,7 @@ flag=False
 currentHeading = 0
 currentLang, currentLat = 0, 0
 landingLang, landingLat = 0, 0
+currentMission = ""
 stage2_complete = threading.Event()
 stage2_complete1 = threading.Event()
 
@@ -52,10 +53,12 @@ def getMotorSpeed(x,y):
 pub = rospy.Publisher('joystick', String, queue_size=10)
 
 def rc_out_callback(data):
+    if(currentMission != "stage2_1" and currentMission != "stage2_2"):
+        return
     ch1 = data.channels[0]
     ch2 = data.channels[1]
 
-    st = "[" + str(int(ch2)) + "," + str(int(ch1)) + "]"
+    st = "[" + str(int(ch1)) + "," + str(int(ch2)) + "]"
     pub.publish(st)
 
 def upload_mission(waypoints):
@@ -166,7 +169,7 @@ def stage1():
 def gps_move(gpslang, gpslat):
     global global_waypoints
 
-    waypoints = [create_waypoint(landingLang, landingLat, 10), create_waypoint(gpslang, gpslat, 10)]
+    waypoints = [create_waypoint(currentLang, currentLat, 10), create_waypoint(gpslang, gpslat, 10)]
     global_waypoints = waypoints
 
     disarm()
@@ -331,6 +334,8 @@ def ArMove():
             aruco_path_for_one(tups[0])
 
 def stage2():
+    global currentMission
+    currentMission = "stage2_1"
     
     gpslang, gpslat = map(float, input(f"Enter GPS coordinates for mission 1: ").split())
     gps_move(gpslang, gpslat)
@@ -341,6 +346,8 @@ def stage2():
 
     rospy.loginfo(f"Stage 2 mission 1 completed.")
 
+    currentMission = "stage2_2"
+
     gpslang, gpslat = map(float, input(f"Enter GPS coordinates for mission 2: ").split())
     gps_move(gpslang, gpslat)
 
@@ -350,6 +357,7 @@ def stage2():
     stage2_complete1.clear()
 
     rospy.loginfo(f"Stage 2 mission 2 completed.")
+    currentMission = ""
 
     # now we will move to aruco two thing can happen, we didn't find any aruco or we found aruco
 

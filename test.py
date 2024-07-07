@@ -8,32 +8,46 @@ from mavros_msgs.srv import SetMode, CommandBool
 from mavros_msgs.msg import RCOut
 from std_msgs.msg import String
 from mavros_msgs.msg import ActuatorControl
-def getMotorSpeed(x,y):
-    if(x>1400 and x<1600 and (y>1600 or y<1400)):
-        return (y,y)
-    elif(y>1400 and y<1600):
-        return (x,3000-x)
+from sensor_msgs.msg import NavSatFix
+import time
+
+lat = 0
+lon = 0
+
+def gps_callback(data):
+    global lat, lon
+    # data from mavros/global_position/global
+    lat = data.latitude
+    lon = data.longitude
+
+def getMotorSpeed(x, y):
+    if x > 1400 and x < 1600 and (y > 1600 or y < 1400):
+        return (y, y)
+    elif y > 1400 and y < 1600:
+        return (x, 3000 - x)
     else:
-        l = int((((y-1500)*(x-1500))/500))
-        r = (y-l)
-        return (l,r)
+        l = int((((y - 1500) * (x - 1500)) / 500))
+        r = (y - l)
+        return (l, r)
+
 pub = rospy.Publisher('joystick', String, queue_size=10)
+
 def rc_out_callback(data):
-    # rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.channels)
     ch1 = data.channels[0]
     ch2 = data.channels[1]
-    # map ch1 andch2 from 1000 to 2000 to 1300 to 1700
-    ch1 = (ch1-1000)*(400/1000)+1300
-    ch2 = (ch2-1000)*(400/1000)+1300
-
-    
-    
-    st = "[" + str(int(ch1)) + "," + str(int(ch1)) + "]"
-    # rospy.loginfo(st)
+    # ch1_mapped = (ch1 - 1000) * (400 / 1000) + 1300
+    # ch2_mapped = (ch2 - 1000) * (400 / 1000) + 1300
+    ch1_mapped = ch1
+    ch2_mapped = ch2
+    if(abs(ch1_mapped-ch2_mapped) < 100):
+        # mapped it from 1000 to 2000 to 1400 to 1600
+        ch1_mapped = (ch1_mapped - 1000) * (460 / 1000) + 1270
+        ch2_mapped = (ch2_mapped - 1000) * (460 / 1000) + 1270
+    st = "[" + str(int(ch1_mapped)) + "," + str(int(ch2_mapped)) + "]"
     pub.publish(st)
 
-
-
+    with open("rc_out_log.txt", "a") as log_file:
+        log_file.write(f"{time.time()} - {ch1},{ch2} - {ch1_mapped},{ch2_mapped}\n")
 
 def upload_mission(waypoints):
     rospy.wait_for_service('/mavros/mission/push')
@@ -108,52 +122,53 @@ def create_waypoint(lat, lon, alt):
     wp.is_current = False
     wp.autocontinue = True
     wp.param1 = 0  # Hold time in seconds
-    wp.param2 = 0  # Acceptance radius in meters (if the sphere with this radius is hit, the waypoint counts as reached)
+    wp.param2 = 0  # Acceptance radius in meters
     wp.param3 = 0  # 0 to pass through WP
-    wp.param4 = float('nan')  # Desired yaw angle at waypoint (NaN for unchanged)
+    wp.param4 = float('nan')  # Desired yaw angle at waypoint
     wp.x_lat = lat
     wp.y_long = lon
     wp.z_alt = alt
     return wp
+
 def safe():
     disarm()
     set_mode("MANUAL")
     rospy.loginfo("Mission upload aborted")
     rospy.signal_shutdown("Mission upload aborted")
     pub.publish("[1500,1500]")
+
 def main():
     rospy.init_node('mission_upload_start')
     rospy.on_shutdown(safe)
-    # Create a list of waypoints
-    waypoints = [
-        create_waypoint(23.8377406, 90.3575542, 10), 
-        create_waypoint(23.8377406, 90.3575542, 10),  # Example coordinates
-          # Example coordinates
-        
-    ]
+    waypoints = []
+
+    while lat == 0 and lon == 0:
+        rospy.loginfo("Waiting for GPS data")
+        rospy.sleep(1)
+    
+    waypoints.append(create_waypoint(lat, lon, 10))
+
+    print("Give destination latitude and longitude: ")
+    lt, ln = map(float, input().split())
+    waypoints.append(create_waypoint(lt, ln, 10))
 
     disarm()
 
-    # Clear any existing mission
     if not clear_mission():
         return
 
-    # Upload the new mission
     if not upload_mission(waypoints):
         return
 
-    # Set the first waypoint as current
     if not set_current_waypoint(0):
         return
 
     if not set_mode("GUIDED"):
         return
 
-    # Set mode to AUTO
     if not set_mode("AUTO"):
         return
 
-    # Arm the vehicle
     if not arm():
         return
 
@@ -163,5 +178,6 @@ def main():
 
 if __name__ == '__main__':
     rospy.Subscriber('/mavros/rc/out', RCOut, rc_out_callback)
+    rospy.Subscriber('/mavros/global_position/global', NavSatFix, gps_callback)
     
     main()

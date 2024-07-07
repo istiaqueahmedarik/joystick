@@ -218,44 +218,34 @@ void tiltServo(int tiltval)
 }
 void joystickCallback(const std_msgs::String &msg)
 {
-    std::vector<int> arr(20, 1500);
     nh.spinOnce();
-    if (msg.data[0] != '[')
+    lastJoyStickCtrlTime = millis();
+    // Access the joystick data from the message
+
+    std::vector<int> arr;
+    // fl.data = msg.data;
+    std::string input = msg.data;
+    std::istringstream iss(input.substr(1, input.length() - 2)); // Remove the enclosing brackets
+
+    int num;
+    char delimiter;
+    while (iss >> num)
     {
-    }
-    else
-    {
-        lastJoyStickCtrlTime = millis();
-
-        std::string input = msg.data;
-        std::istringstream iss(input.substr(1, input.length() - 2)); // Remove the enclosing brackets
-
-        std::string token;
-        while (std::getline(iss, token, ','))
-        {
-            char index_char = token[0];
-            int index;
-            if (isdigit(index_char))
-            {
-                index = index_char - '0';
-            }
-            else
-            {
-                index = 10 + (index_char - 'A'); // Convert letter to number for indices A-E
-            }
-
-            int value = std::stoi(token.substr(1)); // Convert the rest of the string to an int
-            if (index >= 0 && index < arr.size())
-            {
-                arr[index] = value;
-            }
-        }
+        arr.push_back(num);
+        iss >> delimiter;
     }
 
-    // Now arr contains the parsed values.
+    // // vl.data = arr[0];
+    // float yu = arr[3];
+    // float yl = arr[2];
+    // // Set motor 1 to move forward at full speed
+
     int SPEED = 80;
-    if (arr[8] == 2000)
-        SPEED = 70;
+    if (arr.size() >= 9)
+    {
+        if (arr[8] == 2000)
+            SPEED = 70;
+    }
 
     ST.motor(MOTOR2, constrain(map(arr[0], 1000, 2000, -SPEED, SPEED), -SPEED, SPEED));
     ST.motor(MOTOR1, constrain(map(arr[1], 1000, 2000, -SPEED, SPEED), -SPEED, SPEED));
@@ -265,17 +255,19 @@ void joystickCallback(const std_msgs::String &msg)
         ST_ARM.motor(1, constrain(map(arr[2], 1000, 2000, 100, -100), -100, 100));
         ST_ARM.motor(2, constrain(map(arr[3], 1000, 2000, 100, -100), -100, 100));
     }
-
     if (arr.size() >= 5)
     {
+
         chVal[9] = arr[4];
     }
     if (arr.size() >= 6)
     {
+
         chVal[10] = arr[5];
     }
     if (arr.size() >= 7)
     {
+
         chVal[5] = arr[6];
     }
 
@@ -310,16 +302,21 @@ void joystickCallback(const std_msgs::String &msg)
     {
         tiltServo(arr[12]);
     }
+    // // Set motor 2 to move backward at full speed
+    // ST.motor(MOTOR2, yl);
+    // vl.data = yu;
+    // pub.publish(&msg);
 
+    // Publish the new message
     nh.spinOnce();
-    delay(0.1);
+    delay(0.01);
 }
 
 ros::Subscriber<std_msgs::String> joystickSub("joystick", &joystickCallback);
 
 void setup()
 {
-    FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS); // RBG ordering is assumed
+    // FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS); // RBG ordering is assumed
 
     nh.getHardware()->setBaud(115200);
 
@@ -329,7 +326,7 @@ void setup()
 
     Serial5.begin(9600);
     Serial4.begin(9600);
-    Serial.begin(9600);
+    // Serial.begin(9600);
     boxservo1.attach(3);
     boxservo2.attach(2);
     boxservo1.write(panpos);
@@ -485,13 +482,11 @@ void HANDLE_LIFTER()
         if (chVal[10] > 1600 && chVal[10] < 2100)
         {
             z += 50;
-            Serial.println("-->");
-        }
+                }
         else if (chVal[10] < 1400 && chVal[10] > 900)
         {
             {
                 z -= 50;
-                Serial.println("-->");
             }
         }
         // else z =0;

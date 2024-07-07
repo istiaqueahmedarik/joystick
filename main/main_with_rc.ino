@@ -4,51 +4,14 @@
 #include <std_msgs/Float64.h>
 #include <SabertoothSimplified.h>
 #include <Servo.h>
-#include <FastLED.h>
-#define NUM_LEDS 150
-#define DATA_PIN 13 // Pin output for led control.
-
-// Define the array of leds
-CRGB leds[NUM_LEDS];
-
-// For Yellow Led.
-int y_(int a)
-{
-    leds[a] = CRGB(255, 0, 255);
-    FastLED.show();
-}
-
-// For Red Led.
-int r(int b)
-{
-    leds[b] = CRGB(255, 0, 0);
-    FastLED.show();
-}
-
-// For Green Led.
-int g(int c)
-{
-    leds[c] = CRGB(0, 0, 255);
-    FastLED.show();
-}
-
-int Yellow()
-{
-    for (int i = 0; i <= 150; i++)
-        y_(i);
-}
-
-int Red()
-{
-    for (int i = 0; i <= 150; i++)
-        r(i);
-}
-
-int Green()
-{
-    for (int i = 0; i <= 150; i++)
-        g(i);
-}
+#include <std_msgs/Int64.h>
+#include <array>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <AccelStepper.h>
+#include <MultiStepper.h>
+#include <sbus.h>
 
 #define ST_ADDRESS 128 // Sabertooth address (default: 128)
 #define MOTOR1 1       // Sabertooth motor 1 //right
@@ -66,13 +29,9 @@ int tiltpos = 0;
 SabertoothSimplified ST(Serial5);
 SabertoothSimplified ST_ARM(Serial4);
 
-#include <std_msgs/Int64.h>
-#include <array>
-#include <string>
-#include <sstream>
-#include <vector>
-#include <AccelStepper.h>
-#include <MultiStepper.h>
+bfs::SbusRx sbus_rx(&Serial2); /* SBUS object, writing SBUS */
+bfs::SbusData data;
+bool failsafe;
 
 // Constants
 const int STEPS_PER_REV = 1600; // Number of steps per revolution of the stepper motor
@@ -145,6 +104,8 @@ const int t = 200;
 ros::NodeHandle nh;
 unsigned long lastJoyStickCtrlTime = 0;
 int mode = 1;
+bool r_mode = false;
+bool wifi = false;
 // Callback function to handle incoming joystick messages
 void box1(int panval)
 {
@@ -218,44 +179,34 @@ void tiltServo(int tiltval)
 }
 void joystickCallback(const std_msgs::String &msg)
 {
-    std::vector<int> arr(20, 1500);
     nh.spinOnce();
-    if (msg.data[0] != '[')
+    lastJoyStickCtrlTime = millis();
+    // Access the joystick data from the message
+
+    std::vector<int> arr;
+    // fl.data = msg.data;
+    std::string input = msg.data;
+    std::istringstream iss(input.substr(1, input.length() - 2)); // Remove the enclosing brackets
+
+    int num;
+    char delimiter;
+    while (iss >> num)
     {
-    }
-    else
-    {
-        lastJoyStickCtrlTime = millis();
-
-        std::string input = msg.data;
-        std::istringstream iss(input.substr(1, input.length() - 2)); // Remove the enclosing brackets
-
-        std::string token;
-        while (std::getline(iss, token, ','))
-        {
-            char index_char = token[0];
-            int index;
-            if (isdigit(index_char))
-            {
-                index = index_char - '0';
-            }
-            else
-            {
-                index = 10 + (index_char - 'A'); // Convert letter to number for indices A-E
-            }
-
-            int value = std::stoi(token.substr(1)); // Convert the rest of the string to an int
-            if (index >= 0 && index < arr.size())
-            {
-                arr[index] = value;
-            }
-        }
+        arr.push_back(num);
+        iss >> delimiter;
     }
 
-    // Now arr contains the parsed values.
+    // // vl.data = arr[0];
+    // float yu = arr[3];
+    // float yl = arr[2];
+    // // Set motor 1 to move forward at full speed
+
     int SPEED = 80;
-    if (arr[8] == 2000)
-        SPEED = 70;
+    if (arr.size() >= 9)
+    {
+        if (arr[8] == 2000)
+            SPEED = 70;
+    }
 
     ST.motor(MOTOR2, constrain(map(arr[0], 1000, 2000, -SPEED, SPEED), -SPEED, SPEED));
     ST.motor(MOTOR1, constrain(map(arr[1], 1000, 2000, -SPEED, SPEED), -SPEED, SPEED));
@@ -265,17 +216,19 @@ void joystickCallback(const std_msgs::String &msg)
         ST_ARM.motor(1, constrain(map(arr[2], 1000, 2000, 100, -100), -100, 100));
         ST_ARM.motor(2, constrain(map(arr[3], 1000, 2000, 100, -100), -100, 100));
     }
-
     if (arr.size() >= 5)
     {
+
         chVal[9] = arr[4];
     }
     if (arr.size() >= 6)
     {
+
         chVal[10] = arr[5];
     }
     if (arr.size() >= 7)
     {
+
         chVal[5] = arr[6];
     }
 
@@ -310,16 +263,31 @@ void joystickCallback(const std_msgs::String &msg)
     {
         tiltServo(arr[12]);
     }
+    // // Set motor 2 to move backward at full speed
+    // ST.motor(MOTOR2, yl);
+    // vl.data = yu;
+    // pub.publish(&msg);
 
+    // Publish the new message
     nh.spinOnce();
-    delay(0.1);
+    delay(0.01);
 }
-
+void wifiCallback(const std_msgs::String &msg)
+{
+    if (msg.data == "connected")
+    {
+        wifi = true;
+    }
+    else
+    {
+        wifi = false;
+    }
+}
 ros::Subscriber<std_msgs::String> joystickSub("joystick", &joystickCallback);
+ros::Subscriber<std_msgs::String> wifiSub("wifi", &wifiCallback);
 
 void setup()
 {
-    FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS); // RBG ordering is assumed
 
     nh.getHardware()->setBaud(115200);
 
@@ -330,6 +298,9 @@ void setup()
     Serial5.begin(9600);
     Serial4.begin(9600);
     Serial.begin(9600);
+    // Serial.begin(115200);
+    sbus_rx.Begin();
+
     boxservo1.attach(3);
     boxservo2.attach(2);
     boxservo1.write(panpos);
@@ -354,34 +325,8 @@ void setup()
     delay(0.5);
 }
 
-void loop()
+void handleUtils()
 {
-
-    // Red();
-    // delay(1);
-    // Green();
-    // delay(1);
-    // Yellow();
-    // delay(1);
-
-    // if (!Serial5.available())
-    // {
-    //     ST.motor(MOTOR1, 0);
-    //     ST.motor(MOTOR2, 0);
-    // }
-    // if (!Serial4.available())
-    // {
-    //     ST_ARM.motor(MOTOR1, 0);
-    //     ST_ARM.motor(MOTOR2, 0);
-    // }
-    if (!nh.connected())
-    {
-        ST.motor(MOTOR1, 0);
-        ST.motor(MOTOR2, 0);
-        ST_ARM.motor(MOTOR1, 0);
-        ST_ARM.motor(MOTOR2, 0);
-    }
-
     HANDLE_LIFTER();
 
     base_arm(); // ch 4
@@ -389,6 +334,31 @@ void loop()
 
     nh.spinOnce();
     delay(0.01);
+}
+
+void loop()
+{
+    if (!nh.connected() && failsafe) // serial off and failsafe on
+    {
+        ST.motor(MOTOR1, 0);
+        ST.motor(MOTOR2, 0);
+        ST_ARM.motor(MOTOR1, 0);
+        ST_ARM.motor(MOTOR2, 0);
+    }
+    else if (!nh.connected() && !failsafe) // serial off and failsafe off
+    {
+        Serial.println("Serial off");
+        get_sbus();
+    }
+    else if (nh.connected() && r_mode)
+    {
+        get_sbus();
+    }
+    else if (nh.connected() && !wifi)
+    {
+        get_sbus();
+    }
+    handleUtils();
 
     // Add additional code here if needed
 }
@@ -543,4 +513,35 @@ void gripper()
     stepperG.runSpeedToPosition();
     nh.spinOnce();
     delay(0.01);
+}
+
+void get_sbus()
+{
+    if (sbus_rx.Read())
+    {
+        /* Grab the received data */
+        data = sbus_rx.data();
+        /* Display the received data */
+
+        chVal[1] = map(data.ch[0], 210, 1750, 950, 2000);
+        chVal[2] = map(data.ch[1], 210, 1750, 950, 2000);
+        chVal[3] = map(data.ch[2], 210, 1750, 950, 2000);
+        chVal[4] = map(data.ch[3], 210, 1750, 950, 2000);
+        chVal[5] = map(data.ch[4], 210, 1750, 950, 2000);
+        chVal[6] = map(data.ch[5], 210, 1750, 950, 2000);
+        chVal[7] = map(data.ch[6], 210, 1750, 950, 2000);
+        chVal[8] = map(data.ch[7], 210, 1750, 950, 2000);
+        chVal[9] = map(data.ch[8], 210, 1750, 950, 2000);
+        chVal[10] = map(data.ch[9], 210, 1750, 950, 2000);
+        chVal[11] = map(data.ch[10], 210, 1750, 950, 2000);
+        chVal[12] = map(data.ch[11], 210, 1750, 950, 2000);
+        chVal[13] = map(data.ch[12], 210, 1750, 950, 2000);
+        chVal[14] = map(data.ch[13], 210, 1750, 950, 2000);
+        chVal[15] = map(data.ch[14], 210, 1750, 950, 2000);
+        chVal[16] = map(data.ch[15], 210, 1750, 950, 2000);
+
+        failsafe = data.failsafe;
+
+        // printall();
+    }
 }
