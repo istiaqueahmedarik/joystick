@@ -33,10 +33,9 @@ CORS(app, resources={r"/*": {"origins": "*", "allow_headers": ["Content-Type", "
 rospy.init_node('server', anonymous=True)
 
 
-pub = rospy.Publisher('joystick', String, queue_size=10)
-pub1 = rospy.Publisher('wifi', String, queue_size=10)
-rospy.Rate(250)
-mode = rospy.Publisher('mode', String, queue_size=10)
+pub = rospy.Publisher('joystick', String, queue_size=5)
+pub1 = rospy.Publisher('wifi', String, queue_size=5)
+rospy.Rate(2500)
 current_mode = "manual"
 @socketio.on('connect')
 def connect():
@@ -53,7 +52,6 @@ def disconnect():
 @socketio.on('zavier')
 def zavier(data):
     print(data)
-armPub = rospy.Publisher('joyArm', String, queue_size=10)
 @socketio.on('joystick_data')
 def joystick_data(data):
     if(current_mode!='manual'):

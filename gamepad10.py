@@ -10,7 +10,6 @@ from flask_socketio import SocketIO, emit
 import zlib
 sio = socketio.Client()
 
-
 DEADZONE = 30
 
 sio.connect('http://192.168.1.111:5476')
@@ -18,7 +17,6 @@ sio.connect('http://192.168.1.111:5476')
 
 sio.on('connect', lambda: print('Connected to server'))
 sio.on('disconnect', lambda: print('Disconnected from server'))
-
 
 def emit_with_retry(event, message, namespace, max_retries=300, retry_delay=1):
     print(message)
@@ -34,7 +32,6 @@ def emit_with_retry(event, message, namespace, max_retries=300, retry_delay=1):
     if attempt == max_retries:
         print("Failed to emit after several retries.")
 
-
 # sio.on('rover', lambda data: print(data.message))
 
 # waypoints = [] 
@@ -47,7 +44,6 @@ def getMotorSpeed(x,y):
         l = int((((y-1500)*(x-1500))/500))
         r = (y-l)
         return (l,r)
-    
 
 def joystick_to_motor_speed(x, y):
     # if((x<1500+DEADZONE and x>1500-DEADZONE) or (y<1500+DEADZONE and y>1500-DEADZONE)):
@@ -79,6 +75,9 @@ cnt2 = 0
 flag1 = False
 flag2 = False
 flag3 = [0]*15
+click_times1 = []
+click_times2 = []
+
 def joystick():
     # rospy.init_node('joystickVal', anonymous=True)
     # pub = rospy.Publisher('joystick', String, queue_size=15)
@@ -105,6 +104,8 @@ def joystick():
         global open1
         global cnt1 
         global cnt2
+        global click_times1
+        global click_times2
         joystick_count = pygame.joystick.get_count()
         if joystick_count == 0:
             emit_with_retry('joystick_data', "LOL", namespace='/')
@@ -155,30 +156,36 @@ def joystick():
         if(keyboard.is_pressed('d')):
             d=True
 
-
+        current_time = time.time()
+        
         o=False
         if(keyboard.is_pressed('p')):
             o=True
-            cnt1+=1
-            cnt1%=3
-        if(o):
-            if(cnt1==0 and open==1):
-                open=3
-            elif(cnt1==0 and open==3):
-                open=1
+            click_times1.append(current_time)
+            click_times1 = [t for t in click_times1 if current_time - t < 2]
+            if len(click_times1) == 3:
+                cnt1 += 1
+                cnt1 %= 3
+                if cnt1 == 0 and open == 1:
+                    open = 3
+                elif cnt1 == 0 and open == 3:
+                    open = 1
+                click_times1 = []
 
-            
         o1=False
         if(keyboard.is_pressed('o')):
             o1=True
-            cnt2+=1
-            cnt2%=3
-        if(o1):
-            
-            if(cnt2==0 and open1==1):
-                open1=3
-            elif(cnt2==0 and open1==3):
-                open1=1
+            click_times2.append(current_time)
+            click_times2 = [t for t in click_times2 if current_time - t < 2]
+            if len(click_times2) == 3:
+                cnt2 += 1
+                cnt2 %= 3
+                if cnt2 == 0 and open1 == 1:
+                    open1 = 3
+                elif cnt2 == 0 and open1 == 3:
+                    open1 = 1
+                click_times2 = []
+
         up_down=2
         left_right=2
         if(w):
@@ -210,8 +217,6 @@ def joystick():
             lifter_mode=2
         elif(lifter_mode==1000):
             lifter_mode=1
-
-        
 
         s = ""
         if(abs(1500-leftMotor)>DEADZONE):
@@ -306,57 +311,9 @@ def joystick():
             flag3[14] = 1
             s+= "E"+str(2)
 
-
         if(s[len(s)-1]==','):
             s = s[:len(s)-1]
 
-
-        # if(rightMotor!=1500):
-
-        #     s += "1"+str(rightMotor)+","
-        # if(leftX!=1500):
-        #     s += "2"+str(leftX)+","
-        # if(leftY!=1500):
-        #     s += "3"+str(leftY)+","
-        # if(base!=1500):
-        #     s+= "4"+str(base)+","
-        # if(lifter!=1500):
-        #     s+= "5"+str(lifter)+","
-        # if(gripper!=1500):
-        #     s+= "6"+str(gripper)+","
-        # if(lifter_mode!=1500):
-        #     s+= "7"+str(lifter_mode)+","
-        # if(speed_mode!=1500):
-        #     s+= "8"+str(speed_mode)+","
-        # if(arm!=1500):
-        #     s+= "9"+str(arm)+","
-        # if(light!=1500):
-        #     s+= "A"+str(light)+","
-        # if(up_down!=1500):
-        #     s+= "B"+str(up_down)+","
-        # if(left_right!=1500):
-        #     s+= "C"+str(left_right)+","
-        # if(open!=1500):
-        #     s+= "D"+str(open)+","
-        # if(open1!=1500):
-        #     s+= "E"+str(open1)
-        # s+="]"
-
-
-
-        # s += "3"+str(leftY)+","
-        # s+= "4"+str(base)+","
-        # s+= "5"+str(lifter)+","
-        # s+= "6"+str(gripper)+","
-        # s+= "7"+str(lifter_mode)+","
-        # s+= "8"+str(speed_mode)+","
-        # s+= "9"+str(arm)+","
-        # s+= "A"+str(light)+","
-        # s+= "B"+str(up_down)+","
-        # s+= "C"+str(left_right)+","
-        # s+= "D"+str(open)+","
-        # s+= "E"+str(open1)
-        # s+="]"
         print(arm)
         emit_with_retry('armMsg', 'noarm' if arm == 2000 else 'arm', namespace='/')
         if arm == 2000:
@@ -364,18 +321,7 @@ def joystick():
         else:
             emit_with_retry('joystick_data',"LOL",namespace="/")
 
-        # left_motor,right_motor,leftX,leftY,DL,DR,DU,DD,LT,RT,B0,B1,B2,B3,B4,B5,B6,B7,B8,B9,B10
         time.sleep(0.1)
-        # rate.sleep()
-        # 15(B) 16(x) 17(y)
-        # 11 (DR)
-        # 8 (DU)
-        # 13
-
-    
 
 if __name__ == "__main__":
-        joystick()
-
-
-# [leftX,leftY,rightX,rightY,B0,B1,B2,B3,B4,B5,B6,B7,B8,B9,B10,DL,DR,DU,DD,LT,RT]
+    joystick()

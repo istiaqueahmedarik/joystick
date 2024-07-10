@@ -305,8 +305,8 @@ ros::Publisher pub1("dht", &str_msg);
 void setup()
 {
     dht.begin();
-    readAndPrintDHTValues();
-    nh.getHardware()->setBaud(115200);
+    // ;
+    nh.getHardware()->setBaud(256000);
     nh.advertise(pub1);
     // int timeout_ms = 100;
 
@@ -350,10 +350,9 @@ void readAndPrintDHTValues()
 
     if (isnan(humidity) || isnan(temperature))
     {
-
         return;
     }
-    str_msg.data = String(temperature) + "," + String(humidity);
+    str_msg.data = (String(temperature) + "," + String(humidity)).c_str();
     pub1.publish(&str_msg);
 }
 
@@ -395,6 +394,7 @@ void controlMotor(int x, int y)
 
 void loop()
 {
+    readAndPrintDHTValues();
     if (!nh.connected() || !wifi)
     {
         get_sbus();
