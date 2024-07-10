@@ -14,7 +14,7 @@ sio = socketio.Client()
 DEADZONE = 30
 
 sio.connect('http://192.168.1.111:5476')
-# sio.connect('http://192.168.1.177:5476')
+# sio.connect('http://localhost:5476')
 
 sio.on('connect', lambda: print('Connected to server'))
 sio.on('disconnect', lambda: print('Disconnected from server'))
@@ -190,11 +190,17 @@ def joystick():
         print(open)
         light = int((l+1)*500+1000)
         print(open)
+
+        straighMove= keyboard.is_pressed('k')
+
         # print(f"leftY: {leftY}, leftX: {leftX}, rightY: {rightY}, rightX: {rightX}, arm: {arm}, speed_mode: {speed_mode}, arm_mode: {arm_mode}, lifter: {lifter}")
         (leftMotor,rightMotor) = joystick_to_motor_speed(rightX,rightY)
         # s = str(23)+s
 
         #map all the value from 10-20
+        if(straighMove):
+            leftX=1300
+            leftY=1700
 
         
 

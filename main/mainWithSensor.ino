@@ -4,51 +4,20 @@
 #include <std_msgs/Float64.h>
 #include <SabertoothSimplified.h>
 #include <Servo.h>
-#include <FastLED.h>
-#define NUM_LEDS 150
-#define DATA_PIN 13 // Pin output for led control.
+#include <std_msgs/Int64.h>
+#include <array>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <AccelStepper.h>
+#include <MultiStepper.h>
+#include <sbus.h>
+#include "DHT.h"
 
-// Define the array of leds
-CRGB leds[NUM_LEDS];
+#define DHTPIN 23     // Define the data pin
+#define DHTTYPE DHT21 // DHT 21 (AM2301)
 
-// For Yellow Led.
-int y_(int a)
-{
-    leds[a] = CRGB(255, 0, 255);
-    FastLED.show();
-}
-
-// For Red Led.
-int r(int b)
-{
-    leds[b] = CRGB(255, 0, 0);
-    FastLED.show();
-}
-
-// For Green Led.
-int g(int c)
-{
-    leds[c] = CRGB(0, 0, 255);
-    FastLED.show();
-}
-
-int Yellow()
-{
-    for (int i = 0; i <= 150; i++)
-        y_(i);
-}
-
-int Red()
-{
-    for (int i = 0; i <= 150; i++)
-        r(i);
-}
-
-int Green()
-{
-    for (int i = 0; i <= 150; i++)
-        g(i);
-}
+DHT dht(DHTPIN, DHTTYPE);
 
 #define ST_ADDRESS 128 // Sabertooth address (default: 128)
 #define MOTOR1 1       // Sabertooth motor 1 //right
@@ -66,13 +35,9 @@ int tiltpos = 0;
 SabertoothSimplified ST(Serial5);
 SabertoothSimplified ST_ARM(Serial4);
 
-#include <std_msgs/Int64.h>
-#include <array>
-#include <string>
-#include <sstream>
-#include <vector>
-#include <AccelStepper.h>
-#include <MultiStepper.h>
+bfs::SbusRx sbus_rx(&Serial2); /* SBUS object, writing SBUS */
+bfs::SbusData data;
+bool failsafe;
 
 // Constants
 const int STEPS_PER_REV = 1600; // Number of steps per revolution of the stepper motor
@@ -145,6 +110,8 @@ const int t = 200;
 ros::NodeHandle nh;
 unsigned long lastJoyStickCtrlTime = 0;
 int mode = 1;
+bool r_mode = false;
+bool wifi = false;
 // Callback function to handle incoming joystick messages
 void box1(int panval)
 {
@@ -220,7 +187,7 @@ void joystickCallback(const std_msgs::String &msg)
 {
     std::vector<int> arr(20, 1500);
     nh.spinOnce();
-    if (msg.data[0] != '[')
+    if (msg.data[0] == 'L')
     {
     }
     else
@@ -228,7 +195,7 @@ void joystickCallback(const std_msgs::String &msg)
         lastJoyStickCtrlTime = millis();
 
         std::string input = msg.data;
-        std::istringstream iss(input.substr(1, input.length() - 2)); // Remove the enclosing brackets
+        std::istringstream iss(input.substr(0, input.length() - 1)); // Remove the enclosing brackets
 
         std::string token;
         while (std::getline(iss, token, ','))
@@ -247,6 +214,12 @@ void joystickCallback(const std_msgs::String &msg)
             int value = std::stoi(token.substr(1)); // Convert the rest of the string to an int
             if (index >= 0 && index < arr.size())
             {
+                if (value == 3)
+                    value = 2000;
+                else if (value == 2)
+                    value = 1500;
+                else if (value == 1)
+                    value = 1000;
                 arr[index] = value;
             }
         }
@@ -314,15 +287,27 @@ void joystickCallback(const std_msgs::String &msg)
     nh.spinOnce();
     delay(0.1);
 }
-
+void wifiCallback(const std_msgs::String &msg)
+{
+    if (msg.data[0] == 'c')
+    {
+        wifi = true;
+    }
+    else
+    {
+        wifi = false;
+    }
+}
 ros::Subscriber<std_msgs::String> joystickSub("joystick", &joystickCallback);
-
+ros::Subscriber<std_msgs::String> wifiSub("wifi", &wifiCallback);
+std_msgs::String str_msg;
+ros::Publisher pub1("dht", &str_msg);
 void setup()
 {
-    FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS); // RBG ordering is assumed
-
+    dht.begin();
+    readAndPrintDHTValues();
     nh.getHardware()->setBaud(115200);
-
+    nh.advertise(pub1);
     // int timeout_ms = 100;
 
     // Serial.setTimeout(timeout_ms);
@@ -330,6 +315,9 @@ void setup()
     Serial5.begin(9600);
     Serial4.begin(9600);
     Serial.begin(9600);
+    // Serial.begin(115200);
+    sbus_rx.Begin();
+
     boxservo1.attach(3);
     boxservo2.attach(2);
     boxservo1.write(panpos);
@@ -345,6 +333,7 @@ void setup()
 
     nh.initNode();
     nh.subscribe(joystickSub);
+    nh.subscribe(wifiSub);
     // nh.subscribe(pxstateSub);
     // nh.subscribe(vstateSub);
     // nh.advertise(vals);
@@ -354,34 +343,22 @@ void setup()
     delay(0.5);
 }
 
-void loop()
+void readAndPrintDHTValues()
 {
+    float humidity = dht.readHumidity();
+    float temperature = dht.readTemperature();
 
-    // Red();
-    // delay(1);
-    // Green();
-    // delay(1);
-    // Yellow();
-    // delay(1);
-
-    // if (!Serial5.available())
-    // {
-    //     ST.motor(MOTOR1, 0);
-    //     ST.motor(MOTOR2, 0);
-    // }
-    // if (!Serial4.available())
-    // {
-    //     ST_ARM.motor(MOTOR1, 0);
-    //     ST_ARM.motor(MOTOR2, 0);
-    // }
-    if (!nh.connected())
+    if (isnan(humidity) || isnan(temperature))
     {
-        ST.motor(MOTOR1, 0);
-        ST.motor(MOTOR2, 0);
-        ST_ARM.motor(MOTOR1, 0);
-        ST_ARM.motor(MOTOR2, 0);
-    }
 
+        return;
+    }
+    str_msg.data = String(temperature) + "," + String(humidity);
+    pub1.publish(&str_msg);
+}
+
+void handleUtils()
+{
     HANDLE_LIFTER();
 
     base_arm(); // ch 4
@@ -389,6 +366,56 @@ void loop()
 
     nh.spinOnce();
     delay(0.01);
+}
+
+int DEADZONE = 100; // Define deadzone as per requirement
+
+void controlMotor(int x, int y)
+{
+
+    // Normalize the joystick values
+    float x_norm = (x - 1500) / 500.0;
+    float y_norm = (y - 1500) / 500.0;
+
+    // Calculate motor speeds
+    float left_speed_norm = y_norm + x_norm;
+    float right_speed_norm = y_norm - x_norm;
+
+    // Rescale to motor speed range
+    float left_motor = 1500 + 500 * left_speed_norm;
+    float right_motor = 1500 + 500 * right_speed_norm;
+
+    // Ensure the values are within the valid range
+    left_motor = constrain(left_motor, 1000, 2000);
+    right_motor = constrain(right_motor, 1000, 2000);
+
+    ST.motor(MOTOR2, constrain(map(left_motor, 1000, 2000, -80, 80), -80, 80));
+    ST.motor(MOTOR1, constrain(map(right_motor, 1000, 2000, -80, 80), -80, 80));
+}
+
+void loop()
+{
+    if (!nh.connected() || !wifi)
+    {
+        get_sbus();
+    }
+    handleUtils();
+    // if (!nh.connected() && failsafe)  // serial off and failsafe on
+    // {
+    //   ST.motor(MOTOR1, 0);
+    //   ST.motor(MOTOR2, 0);
+    //   ST_ARM.motor(1, 0);
+    //   ST_ARM.motor(2, 0);
+    //   get_sbus();
+    // } else if (!nh.connected() && !failsafe)  // serial off and failsafe off
+    // {
+    //   Serial.println("rc on");
+    //   get_sbus();
+    // } else if (nh.connected() && r_mode) {
+    //   get_sbus();
+    // } else if (nh.connected() && !wifi) {
+    //   get_sbus();
+    // }
 
     // Add additional code here if needed
 }
@@ -445,6 +472,7 @@ void base_arm()
 
         stepperB.moveTo(b);
         stepperB.setSpeed(5000);
+
         stepperB.runSpeedToPosition();
         // Serial.println(base_step);
     }
@@ -490,13 +518,11 @@ void HANDLE_LIFTER()
         if (chVal[10] > 1600 && chVal[10] < 2100)
         {
             z += 50;
-            Serial.println("-->");
         }
         else if (chVal[10] < 1400 && chVal[10] > 900)
         {
             {
                 z -= 50;
-                Serial.println("-->");
             }
         }
         // else z =0;
@@ -549,3 +575,136 @@ void gripper()
     nh.spinOnce();
     delay(0.01);
 }
+
+void checkFailSafe()
+{
+    if (sbus_rx.Read())
+    {
+        failsafe = data.failsafe;
+    }
+}
+
+void get_sbus()
+{
+    if (sbus_rx.Read())
+    {
+        /* Grab the received data */
+        data = sbus_rx.data();
+        failsafe = data.failsafe;
+        if (failsafe)
+        {
+            for (int i = 0; i < 29; i++)
+                chVal[i] = 1500;
+            ST.motor(MOTOR1, 0);
+            ST.motor(MOTOR2, 0);
+            ST_ARM.motor(1, 0);
+            ST_ARM.motor(2, 0);
+            // handleUtils();
+            return;
+        }
+
+        /* Display the received data */
+        int ar = map(data.ch[8], 173, 1810, 1000, 2000);
+        int md = map(data.ch[5], 173, 1810, 1000, 2000);
+        if (abs(md - 1500) <= 3)
+        {
+            mode = 3;
+        }
+        else if (abs(md - 1000) <= 3)
+        {
+            mode = 2;
+        }
+        else if (abs(md - 2000) <= 3)
+        {
+            mode = 1;
+        }
+        if (abs(ar - 1000) <= 3)
+        {
+            controlMotor(1500, 1500);
+
+            ST_ARM.motor(1, constrain(map(1500, 1000, 2000, 100, -100), -100, 100));
+            ST_ARM.motor(2, constrain(map(1500, 1000, 2000, 100, -100), -100, 100));
+            chVal[5] = 1500;
+            chVal[9] = 1500;
+            return;
+        }
+        chVal[1] = map(data.ch[0], 173, 1810, 1000, 2000);
+        chVal[2] = map(data.ch[1], 173, 1810, 1000, 2000);
+        chVal[3] = map(data.ch[2], 175, 1810, 1000, 2000);
+        chVal[4] = map(data.ch[3], 173, 1810, 1000, 2000);
+        chVal[9] = map(data.ch[4], 173, 1810, 1000, 2000);
+        chVal[10] = map(data.ch[6], 210, 1750, 1000, 2000);
+        // chVal[8] = map(data.ch[7], 210, 1750, 950, 2000);
+        // chVal[9] = map(data.ch[8], 210, 1750, 950, 2000);
+        // chVal[10] = map(data.ch[9], 210, 1750, 950, 2000);
+        int gOf = map(data.ch[10], 173, 1810, 1000, 2000);
+        int gOn = map(data.ch[11], 173, 1810, 1000, 2000);
+        // chVal[13] = map(data.ch[12], 210, 1750, 950, 2000);
+        // chVal[14] = map(data.ch[13], 210, 1750, 950, 2000);
+        // chVal[15] = map(data.ch[14], 210, 1750, 950, 2000);
+        // chVal[16] = map(data.ch[15], 210, 1750, 950, 2000);
+        ST_ARM.motor(1, constrain(map(chVal[3], 1000, 2000, 100, -100), -100, 100));
+        ST_ARM.motor(2, constrain(map(chVal[4], 1000, 2000, 100, -100), -100, 100));
+        if (abs(gOn - 2000) <= 3)
+        {
+            chVal[5] = 2000;
+        }
+        else
+            chVal[5] = 1500;
+        if (chVal[5] != 2000)
+        {
+            if (abs(gOf - 2000) <= 3)
+            {
+                chVal[5] = 1000;
+            }
+            else
+                chVal[5] = 1500;
+        }
+
+        // Serial.println(gOn);
+        // Serial.println(gOf);
+        controlMotor(chVal[1], chVal[2]);
+        handleUtils();
+
+        // printall();
+        // printChValues();
+    }
+}
+
+// void printChValues()
+// {
+
+//     Serial.print(chVal[1]);
+//     Serial.print(" ");
+//     Serial.print(chVal[2]);
+//     Serial.print(" ");
+//     Serial.print(chVal[3]);
+//     Serial.print(" ");
+//     Serial.print(chVal[4]);
+//     Serial.print(" ");
+//     Serial.print(chVal[5]);
+//     Serial.print(" ");
+//     Serial.print(chVal[6]);
+//     Serial.print(" ");
+//     Serial.print(chVal[7]);
+//     Serial.print(" ");
+//     Serial.print(chVal[8]);
+//     Serial.print(" ");
+//     Serial.print(chVal[9]);
+//     Serial.print(" ");
+//     Serial.print(chVal[10]);
+//     Serial.print(" ");
+//     Serial.print(chVal[11]);
+//     Serial.print(" ");
+//     Serial.print(chVal[12]);
+//     Serial.print(" ");
+//     Serial.print(chVal[13]);
+//     Serial.print(" ");
+//     Serial.print(chVal[14]);
+//     Serial.print(" ");
+//     Serial.print(chVal[15]);
+//     Serial.print(" ");
+//     Serial.print(chVal[16]);
+//     Serial.print(" ");
+//     Serial.println("");
+// }

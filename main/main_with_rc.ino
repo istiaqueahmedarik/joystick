@@ -179,34 +179,44 @@ void tiltServo(int tiltval)
 }
 void joystickCallback(const std_msgs::String &msg)
 {
+    std::vector<int> arr(20, 1500);
     nh.spinOnce();
-    lastJoyStickCtrlTime = millis();
-    // Access the joystick data from the message
-
-    std::vector<int> arr;
-    // fl.data = msg.data;
-    std::string input = msg.data;
-    std::istringstream iss(input.substr(1, input.length() - 2)); // Remove the enclosing brackets
-
-    int num;
-    char delimiter;
-    while (iss >> num)
+    if (msg.data[0] != '[')
     {
-        arr.push_back(num);
-        iss >> delimiter;
+    }
+    else
+    {
+        lastJoyStickCtrlTime = millis();
+
+        std::string input = msg.data;
+        std::istringstream iss(input.substr(1, input.length() - 2)); // Remove the enclosing brackets
+
+        std::string token;
+        while (std::getline(iss, token, ','))
+        {
+            char index_char = token[0];
+            int index;
+            if (isdigit(index_char))
+            {
+                index = index_char - '0';
+            }
+            else
+            {
+                index = 10 + (index_char - 'A'); // Convert letter to number for indices A-E
+            }
+
+            int value = std::stoi(token.substr(1)); // Convert the rest of the string to an int
+            if (index >= 0 && index < arr.size())
+            {
+                arr[index] = value;
+            }
+        }
     }
 
-    // // vl.data = arr[0];
-    // float yu = arr[3];
-    // float yl = arr[2];
-    // // Set motor 1 to move forward at full speed
-
+    // Now arr contains the parsed values.
     int SPEED = 80;
-    if (arr.size() >= 9)
-    {
-        if (arr[8] == 2000)
-            SPEED = 70;
-    }
+    if (arr[8] == 2000)
+        SPEED = 70;
 
     ST.motor(MOTOR2, constrain(map(arr[0], 1000, 2000, -SPEED, SPEED), -SPEED, SPEED));
     ST.motor(MOTOR1, constrain(map(arr[1], 1000, 2000, -SPEED, SPEED), -SPEED, SPEED));
@@ -216,19 +226,17 @@ void joystickCallback(const std_msgs::String &msg)
         ST_ARM.motor(1, constrain(map(arr[2], 1000, 2000, 100, -100), -100, 100));
         ST_ARM.motor(2, constrain(map(arr[3], 1000, 2000, 100, -100), -100, 100));
     }
+
     if (arr.size() >= 5)
     {
-
         chVal[9] = arr[4];
     }
     if (arr.size() >= 6)
     {
-
         chVal[10] = arr[5];
     }
     if (arr.size() >= 7)
     {
-
         chVal[5] = arr[6];
     }
 
@@ -263,18 +271,13 @@ void joystickCallback(const std_msgs::String &msg)
     {
         tiltServo(arr[12]);
     }
-    // // Set motor 2 to move backward at full speed
-    // ST.motor(MOTOR2, yl);
-    // vl.data = yu;
-    // pub.publish(&msg);
 
-    // Publish the new message
     nh.spinOnce();
-    delay(0.01);
+    delay(0.1);
 }
 void wifiCallback(const std_msgs::String &msg)
 {
-    if (msg.data == "connected")
+    if (msg.data[0] == 'c')
     {
         wifi = true;
     }
@@ -316,6 +319,7 @@ void setup()
 
     nh.initNode();
     nh.subscribe(joystickSub);
+    nh.subscribe(wifiSub);
     // nh.subscribe(pxstateSub);
     // nh.subscribe(vstateSub);
     // nh.advertise(vals);
@@ -336,29 +340,54 @@ void handleUtils()
     delay(0.01);
 }
 
+int DEADZONE = 100; // Define deadzone as per requirement
+
+void controlMotor(int x, int y)
+{
+
+    // Normalize the joystick values
+    float x_norm = (x - 1500) / 500.0;
+    float y_norm = (y - 1500) / 500.0;
+
+    // Calculate motor speeds
+    float left_speed_norm = y_norm + x_norm;
+    float right_speed_norm = y_norm - x_norm;
+
+    // Rescale to motor speed range
+    float left_motor = 1500 + 500 * left_speed_norm;
+    float right_motor = 1500 + 500 * right_speed_norm;
+
+    // Ensure the values are within the valid range
+    left_motor = constrain(left_motor, 1000, 2000);
+    right_motor = constrain(right_motor, 1000, 2000);
+
+    ST.motor(MOTOR2, constrain(map(left_motor, 1000, 2000, -80, 80), -80, 80));
+    ST.motor(MOTOR1, constrain(map(right_motor, 1000, 2000, -80, 80), -80, 80));
+}
+
 void loop()
 {
-    if (!nh.connected() && failsafe) // serial off and failsafe on
-    {
-        ST.motor(MOTOR1, 0);
-        ST.motor(MOTOR2, 0);
-        ST_ARM.motor(MOTOR1, 0);
-        ST_ARM.motor(MOTOR2, 0);
-    }
-    else if (!nh.connected() && !failsafe) // serial off and failsafe off
-    {
-        Serial.println("Serial off");
-        get_sbus();
-    }
-    else if (nh.connected() && r_mode)
-    {
-        get_sbus();
-    }
-    else if (nh.connected() && !wifi)
+    if (!nh.connected() || !wifi)
     {
         get_sbus();
     }
     handleUtils();
+    // if (!nh.connected() && failsafe)  // serial off and failsafe on
+    // {
+    //   ST.motor(MOTOR1, 0);
+    //   ST.motor(MOTOR2, 0);
+    //   ST_ARM.motor(1, 0);
+    //   ST_ARM.motor(2, 0);
+    //   get_sbus();
+    // } else if (!nh.connected() && !failsafe)  // serial off and failsafe off
+    // {
+    //   Serial.println("rc on");
+    //   get_sbus();
+    // } else if (nh.connected() && r_mode) {
+    //   get_sbus();
+    // } else if (nh.connected() && !wifi) {
+    //   get_sbus();
+    // }
 
     // Add additional code here if needed
 }
@@ -402,14 +431,20 @@ void base_arm()
 
     if ((chVal[9] < 1400 || chVal[9] > 1600) && stepperB.currentPosition() <= thrs_base_f && stepperB.currentPosition() >= thrs_base_b)
     {
+        int diff = abs(chVal[9] - 1500);
+        int mp = map(diff, 0, 500, 50, 500);
 
         if (chVal[9] > 1600 && stepperB.currentPosition() <= thrs_base_f && chVal[9] < 2100)
-            b += 500;
+        {
+            // map chVal[9] from 0-500 to 50-500
+            b += mp;
+        }
         else if (chVal[9] < 1400 && stepperB.currentPosition() >= thrs_base_b && chVal[9] > 900)
-            b -= 500;
+            b -= mp;
 
         stepperB.moveTo(b);
         stepperB.setSpeed(5000);
+
         stepperB.runSpeedToPosition();
         // Serial.println(base_step);
     }
@@ -455,13 +490,11 @@ void HANDLE_LIFTER()
         if (chVal[10] > 1600 && chVal[10] < 2100)
         {
             z += 50;
-            Serial.println("-->");
         }
         else if (chVal[10] < 1400 && chVal[10] > 900)
         {
             {
                 z -= 50;
-                Serial.println("-->");
             }
         }
         // else z =0;
@@ -515,33 +548,135 @@ void gripper()
     delay(0.01);
 }
 
+void checkFailSafe()
+{
+    if (sbus_rx.Read())
+    {
+        failsafe = data.failsafe;
+    }
+}
+
 void get_sbus()
 {
     if (sbus_rx.Read())
     {
         /* Grab the received data */
         data = sbus_rx.data();
-        /* Display the received data */
-
-        chVal[1] = map(data.ch[0], 210, 1750, 950, 2000);
-        chVal[2] = map(data.ch[1], 210, 1750, 950, 2000);
-        chVal[3] = map(data.ch[2], 210, 1750, 950, 2000);
-        chVal[4] = map(data.ch[3], 210, 1750, 950, 2000);
-        chVal[5] = map(data.ch[4], 210, 1750, 950, 2000);
-        chVal[6] = map(data.ch[5], 210, 1750, 950, 2000);
-        chVal[7] = map(data.ch[6], 210, 1750, 950, 2000);
-        chVal[8] = map(data.ch[7], 210, 1750, 950, 2000);
-        chVal[9] = map(data.ch[8], 210, 1750, 950, 2000);
-        chVal[10] = map(data.ch[9], 210, 1750, 950, 2000);
-        chVal[11] = map(data.ch[10], 210, 1750, 950, 2000);
-        chVal[12] = map(data.ch[11], 210, 1750, 950, 2000);
-        chVal[13] = map(data.ch[12], 210, 1750, 950, 2000);
-        chVal[14] = map(data.ch[13], 210, 1750, 950, 2000);
-        chVal[15] = map(data.ch[14], 210, 1750, 950, 2000);
-        chVal[16] = map(data.ch[15], 210, 1750, 950, 2000);
-
         failsafe = data.failsafe;
+        if (failsafe)
+        {
+            for (int i = 0; i < 29; i++)
+                chVal[i] = 1500;
+            ST.motor(MOTOR1, 0);
+            ST.motor(MOTOR2, 0);
+            ST_ARM.motor(1, 0);
+            ST_ARM.motor(2, 0);
+            // handleUtils();
+            return;
+        }
+
+        /* Display the received data */
+        int ar = map(data.ch[8], 173, 1810, 1000, 2000);
+        int md = map(data.ch[5], 173, 1810, 1000, 2000);
+        if (abs(md - 1500) <= 3)
+        {
+            mode = 3;
+        }
+        else if (abs(md - 1000) <= 3)
+        {
+            mode = 2;
+        }
+        else if (abs(md - 2000) <= 3)
+        {
+            mode = 1;
+        }
+        if (abs(ar - 1000) <= 3)
+        {
+            controlMotor(1500, 1500);
+
+            ST_ARM.motor(1, constrain(map(1500, 1000, 2000, 100, -100), -100, 100));
+            ST_ARM.motor(2, constrain(map(1500, 1000, 2000, 100, -100), -100, 100));
+            chVal[5] = 1500;
+            chVal[9] = 1500;
+            return;
+        }
+        chVal[1] = map(data.ch[0], 173, 1810, 1000, 2000);
+        chVal[2] = map(data.ch[1], 173, 1810, 1000, 2000);
+        chVal[3] = map(data.ch[2], 175, 1810, 1000, 2000);
+        chVal[4] = map(data.ch[3], 173, 1810, 1000, 2000);
+        chVal[9] = map(data.ch[4], 173, 1810, 1000, 2000);
+        chVal[10] = map(data.ch[6], 210, 1750, 1000, 2000);
+        // chVal[8] = map(data.ch[7], 210, 1750, 950, 2000);
+        // chVal[9] = map(data.ch[8], 210, 1750, 950, 2000);
+        // chVal[10] = map(data.ch[9], 210, 1750, 950, 2000);
+        int gOf = map(data.ch[10], 173, 1810, 1000, 2000);
+        int gOn = map(data.ch[11], 173, 1810, 1000, 2000);
+        // chVal[13] = map(data.ch[12], 210, 1750, 950, 2000);
+        // chVal[14] = map(data.ch[13], 210, 1750, 950, 2000);
+        // chVal[15] = map(data.ch[14], 210, 1750, 950, 2000);
+        // chVal[16] = map(data.ch[15], 210, 1750, 950, 2000);
+        ST_ARM.motor(1, constrain(map(chVal[3], 1000, 2000, 100, -100), -100, 100));
+        ST_ARM.motor(2, constrain(map(chVal[4], 1000, 2000, 100, -100), -100, 100));
+        if (abs(gOn - 2000) <= 3)
+        {
+            chVal[5] = 2000;
+        }
+        else
+            chVal[5] = 1500;
+        if (chVal[5] != 2000)
+        {
+            if (abs(gOf - 2000) <= 3)
+            {
+                chVal[5] = 1000;
+            }
+            else
+                chVal[5] = 1500;
+        }
+
+        // Serial.println(gOn);
+        // Serial.println(gOf);
+        controlMotor(chVal[1], chVal[2]);
+        handleUtils();
 
         // printall();
+        // printChValues();
     }
 }
+
+// void printChValues()
+// {
+
+//     Serial.print(chVal[1]);
+//     Serial.print(" ");
+//     Serial.print(chVal[2]);
+//     Serial.print(" ");
+//     Serial.print(chVal[3]);
+//     Serial.print(" ");
+//     Serial.print(chVal[4]);
+//     Serial.print(" ");
+//     Serial.print(chVal[5]);
+//     Serial.print(" ");
+//     Serial.print(chVal[6]);
+//     Serial.print(" ");
+//     Serial.print(chVal[7]);
+//     Serial.print(" ");
+//     Serial.print(chVal[8]);
+//     Serial.print(" ");
+//     Serial.print(chVal[9]);
+//     Serial.print(" ");
+//     Serial.print(chVal[10]);
+//     Serial.print(" ");
+//     Serial.print(chVal[11]);
+//     Serial.print(" ");
+//     Serial.print(chVal[12]);
+//     Serial.print(" ");
+//     Serial.print(chVal[13]);
+//     Serial.print(" ");
+//     Serial.print(chVal[14]);
+//     Serial.print(" ");
+//     Serial.print(chVal[15]);
+//     Serial.print(" ");
+//     Serial.print(chVal[16]);
+//     Serial.print(" ");
+//     Serial.println("");
+// }

@@ -34,7 +34,7 @@ rospy.init_node('server', anonymous=True)
 
 
 pub = rospy.Publisher('joystick', String, queue_size=10)
-pub1 = rospy.Publisher('client', String, queue_size=10)
+pub1 = rospy.Publisher('wifi', String, queue_size=10)
 rospy.Rate(250)
 mode = rospy.Publisher('mode', String, queue_size=10)
 current_mode = "manual"
@@ -47,7 +47,7 @@ def connect():
 @socketio.on('disconnect')
 def disconnect():
     print('Client disconnected')
-    pub.publish('[1500,1500,1500,1500,1500,1500,1500,1500]')
+    pub.publish('LOL')
     rospy.loginfo('Client disconnected')
     pub1.publish('disconnected')
 @socketio.on('zavier')
@@ -65,7 +65,7 @@ def joystick_data(data):
 
 
 def main():
-
+    pub1.publish('disconnected')
     socketio.run(app, host='0.0.0.0', port=5476,debug=True,use_reloader=True,log_output=True)
 
 
